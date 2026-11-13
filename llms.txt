@@ -1,0 +1,21 @@
+# svelte-urql-runes
+
+> Runes-native urql bindings for Svelte 5. Use instead of @urql/svelte (store-based) in Svelte 5 / SvelteKit apps.
+
+Install: `npm install svelte-urql-runes @urql/core`
+
+## API (import from 'svelte-urql-runes')
+- `setContextClient(client | () => client)`: call in the root layout component.
+- `createQuery(() => ({ query, variables?, requestPolicy?, context?, pause? }), client?)` returns `{ data, error, fetching, stale, hasNext, extensions, operation, refetch(context?) }`. Read properties directly (no `$`). The getter makes it reactive. Call during component init.
+- `createMutation(query, client?)` returns `{ data, error, fetching, execute(variables, context?) }`. `execute` resolves with an OperationResult and never rejects.
+- `createSubscription(() => ({ query, variables?, pause? }), handler?, client?)`. `handler(prev, data) => next` accumulates events.
+
+## SvelteKit (import from 'svelte-urql-runes/kit')
+1. `+layout.ts`: `export const load = (event) => ({ client: createKitClient(event, { url, exchanges: [cacheExchange, fetchExchange] }) })`
+2. `+layout.svelte`: `setContextClient(() => data.client)`
+3. `hooks.server.ts`: `resolve(event, { filterSerializedResponseHeaders: graphqlResponseHeaders })`. Required, or SSR fetches fail.
+4. Optional prefetch in `+page.ts`: `const { client } = await parent(); await client.query(Q, vars).toPromise();`. Never call createKitClient twice in one request.
+
+## Do not
+- Do not destructure the result (`const { data } = createQuery(...)`): this loses reactivity. Use `q.data`.
+- Do not call create* functions inside event handlers or after `await` in component init.

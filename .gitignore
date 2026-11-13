@@ -1,0 +1,8 @@
+node_modules
+dist
+.svelte-kit
+.vitest-attachments
+**/__screenshots__
+.vitest
+test-results
+playwright-report

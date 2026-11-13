@@ -1,0 +1,17 @@
+{
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"types": ["$app/types", "node"],
+		"allowJs": true,
+		"checkJs": true,
+		"strict": true,
+		"plugins": [
+			{
+				"name": "gql.tada/ts-plugin",
+				"schema": "./src/routes/api/graphql/schema.graphql",
+				"tadaOutputLocation": "./src/routes/graphql-env.d.ts"
+			}
+		]
+	},
+	"include": ["src", "tests", "e2e", "*"]
+}
