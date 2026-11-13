@@ -172,7 +172,7 @@ export const load = async ({ parent }) => {
 
 Then call `createQuery({ query: TodosQuery })` in the page as usual. During SSR it renders the prefetched data from the cache. During hydration, SvelteKit replays the inlined response, so the browser sends **no** GraphQL request. Queries you don't prefetch render their loading state on the server and fetch in the browser.
 
-On logout, call `resetKitClient()` and then `invalidateAll()` to start over with an empty cache.
+On logout, call `resetKitClient()` and then `invalidateAll()` to start over with an empty cache. Queries and subscriptions that are already mounted switch to the new client, drop the old client's results and re-execute.
 
 ## Typing
 

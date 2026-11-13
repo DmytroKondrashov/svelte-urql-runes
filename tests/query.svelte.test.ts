@@ -92,11 +92,13 @@ describe('createQuery', () => {
 				return { query: TodoQuery, variables: { id } };
 			}, t.client)
 		);
+		// The initial synchronous cache read may tear down its own cache-only operation.
+		const teardowns = [...t.teardowns];
 
 		unrelated++;
 		flushSync();
 		expect(t.count()).toBe(1);
-		expect(t.teardowns).toEqual([]);
+		expect(t.teardowns).toEqual(teardowns);
 	});
 
 	it('does not execute while paused and keeps previous data', () => {
@@ -191,5 +193,15 @@ describe('createQuery', () => {
 		const key = t.last().key;
 		destroy();
 		expect(t.teardowns).toContain(key);
+	});
+
+	it('sends nothing when destroyed before its first effect run', () => {
+		const t = createTestClient();
+		const destroy = $effect.root(() => {
+			createQuery({ query: TodoQuery, variables: { id: '1' } }, t.client);
+		});
+		destroy();
+		flushSync();
+		expect(t.count()).toBe(0);
 	});
 });

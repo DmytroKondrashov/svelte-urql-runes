@@ -9,7 +9,9 @@ const CLIENT_KEY = Symbol('svelte-urql-runes/client');
  * typically in the root `+layout.svelte`.
  *
  * Pass a getter when the client comes from props, e.g. `setContextClient(() => data.client)`.
- * Each binding reads it once, when it is created.
+ * Bindings read it reactively: when it returns a different client, queries and
+ * subscriptions drop their results and re-execute on the new one, and mutations use
+ * it from their next `execute` call.
  */
 export function setContextClient(client: Client | (() => Client)): void {
 	setContext(CLIENT_KEY, typeof client === 'function' ? client : () => client);
@@ -20,15 +22,22 @@ export function setContextClient(client: Client | (() => Client)): void {
  * component initialisation.
  */
 export function getContextClient(): Client {
+	return getContextClientGetter()();
+}
+
+function getContextClientGetter(): () => Client {
 	if (!hasContext(CLIENT_KEY)) {
 		throw new Error(
 			'svelte-urql-runes: no urql client found in context. Call setContextClient(client) in a parent component, or pass a client explicitly.'
 		);
 	}
-	return getContext<() => Client>(CLIENT_KEY)();
+	return getContext<() => Client>(CLIENT_KEY);
 }
 
-/** Uses the given client, falling back to the context client. */
-export function resolveClient(client: Client | undefined): Client {
-	return client ?? getContextClient();
+/**
+ * Returns a getter for the given client, falling back to the context client. Must be
+ * called during component initialisation; the getter itself can be called any time.
+ */
+export function resolveClient(client: Client | undefined): () => Client {
+	return client ? () => client : getContextClientGetter();
 }

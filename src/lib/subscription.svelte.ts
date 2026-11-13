@@ -59,7 +59,8 @@ export function createSubscription<
 	handler?: SubscriptionHandler<Data, Result>,
 	client?: Client
 ): SubscriptionState<Result, Data, Variables> {
-	const urql = resolveClient(client);
+	const getClient = resolveClient(client);
+	const urql = $derived(getClient());
 	const getOptions = toGetter(options);
 
 	const prepared = $derived.by(
@@ -79,9 +80,21 @@ export function createSubscription<
 	let operation = $state.raw<Operation<Data, Variables> | undefined>(undefined);
 	let fetching = $state(false);
 	let lastKey: number | undefined;
+	let lastClient: Client | undefined;
 
 	$effect(() => {
 		const current: Prepared<Data, Variables> = prepared;
+		const active = urql;
+
+		// A new client (e.g. after logout) must not show the old client's events.
+		if (lastClient !== undefined && lastClient !== active) {
+			data = undefined;
+			error = undefined;
+			extensions = undefined;
+			operation = undefined;
+		}
+		lastClient = active;
+
 		if (current.pause) {
 			fetching = false;
 			return;
@@ -98,7 +111,7 @@ export function createSubscription<
 		// Untracked: the effect writes `data`, so it must not depend on it.
 		let accumulated = untrack(() => data);
 		const { unsubscribe } = pipe(
-			urql.executeSubscription<Data, Variables>(current.request, current.context),
+			active.executeSubscription<Data, Variables>(current.request, current.context),
 			onEnd(() => {
 				fetching = false;
 			}),

@@ -9,7 +9,6 @@ import {
 	type OperationResult,
 	type RequestPolicy
 } from '@urql/core';
-import { BROWSER } from 'esm-env';
 import { untrack } from 'svelte';
 import { pipe, subscribe } from 'wonka';
 import { resolveClient } from './context.js';
@@ -78,7 +77,8 @@ export function createQuery<Data = any, Variables extends AnyVariables = AnyVari
 	options: MaybeGetter<QueryOptions<Data, Variables>>,
 	client?: Client
 ): QueryState<Data, Variables> {
-	const urql = resolveClient(client);
+	const getClient = resolveClient(client);
+	const urql = $derived(getClient());
 	const getOptions = toGetter(options);
 
 	const prepared = $derived.by(
@@ -100,8 +100,13 @@ export function createQuery<Data = any, Variables extends AnyVariables = AnyVari
 	let override: Partial<OperationContext> | undefined;
 	let waiters: Array<(result: OperationResult<Data, Variables>) => void> = [];
 	let lastKey: number | undefined;
+	let lastClient: Client | undefined;
 
-	function execute(current: Prepared<Data, Variables>, forced?: Partial<OperationContext>) {
+	function execute(
+		active: Client,
+		current: Prepared<Data, Variables>,
+		forced?: Partial<OperationContext>
+	) {
 		if (lastKey !== undefined && lastKey !== current.request.key) {
 			snapshot = emptySnapshot();
 		}
@@ -109,7 +114,7 @@ export function createQuery<Data = any, Variables extends AnyVariables = AnyVari
 		fetching = true;
 
 		return pipe(
-			urql.executeQuery<Data, Variables>(current.request, { ...current.context, ...forced }),
+			active.executeQuery<Data, Variables>(current.request, { ...current.context, ...forced }),
 			subscribe((result) => {
 				snapshot = toSnapshot(result);
 				fetching = false;
@@ -122,38 +127,32 @@ export function createQuery<Data = any, Variables extends AnyVariables = AnyVari
 		).unsubscribe;
 	}
 
+	// Read the cache synchronously so a cached result is there for the first render,
+	// both during SSR (where effects never run) and in the browser (matching the SSR
+	// markup during hydration). Only the effect subscribes, so a binding destroyed
+	// before its first effect run leaves nothing behind.
 	const initial = untrack(() => prepared);
-	// In the browser, subscribe right away so a cached result is there for the first
-	// render (and matches the SSR markup during hydration). The effect adopts this
-	// subscription when it first runs.
-	let eager: (() => void) | undefined;
-	if (BROWSER) {
-		if (!initial.pause) eager = execute(initial);
-	} else {
-		// During SSR effects never run: render whatever a load function put in the cache.
-		const cached = initial.pause ? null : readCached(urql, initial);
-		if (cached) snapshot = toSnapshot(cached);
-		fetching = !cached && !initial.pause;
-	}
+	lastClient = untrack(() => urql);
+	const cached = initial.pause ? null : readCached(lastClient, initial);
+	if (cached) snapshot = toSnapshot(cached);
+	fetching = !cached && !initial.pause;
 
 	$effect(() => {
 		refetches;
 		const current: Prepared<Data, Variables> = prepared;
+		const active = urql;
 		const forced = override;
 		override = undefined;
 
-		if (eager) {
-			const adopted = eager;
-			eager = undefined;
-			if (current === initial && !forced) return adopted;
-			adopted();
-		}
+		// A new client (e.g. after logout) must not show the old client's results.
+		if (active !== lastClient) snapshot = emptySnapshot();
+		lastClient = active;
 
 		if (current.pause && !forced) {
 			fetching = false;
 			return;
 		}
-		return execute(current, forced);
+		return execute(active, current, forced);
 	});
 
 	return {

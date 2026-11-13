@@ -43,7 +43,7 @@ export function createMutation<Data = any, Variables extends AnyVariables = AnyV
 	query: DocumentInput<Data, Variables>,
 	client?: Client
 ): MutationState<Data, Variables> {
-	const urql = resolveClient(client);
+	const getClient = resolveClient(client);
 	let snapshot = $state.raw<ResultSnapshot<Data, Variables>>(emptySnapshot());
 	let fetching = $state(false);
 	let latest = 0;
@@ -68,7 +68,7 @@ export function createMutation<Data = any, Variables extends AnyVariables = AnyV
 			const call = ++latest;
 			fetching = true;
 			const result = await pipe(
-				urql.executeMutation<Data, Variables>(createRequest(query, variables), context ?? {}),
+				getClient().executeMutation<Data, Variables>(createRequest(query, variables), context ?? {}),
 				toPromise
 			);
 			if (call === latest) {
